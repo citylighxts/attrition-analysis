@@ -20,12 +20,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+db_uri = "neo4j+s://f1092891.databases.neo4j.io"
+db_user = "neo4j"
+db_pass = "RJlbxkjZP74VnrD6R87vajPEbRS3Xs5YE2UyVZUT2K4"
+db_name = "neo4j"
+
 with st.sidebar:
-    st.header("⚙️ Koneksi Database")
-    db_uri = st.text_input("URI", "neo4j+s://f1092891.databases.neo4j.io")
-    db_user = st.text_input("Username", "neo4j")
-    db_pass = st.text_input("Password", "RJlbxkjZP74VnrD6R87vajPEbRS3Xs5YE2UyVZUT2K4", type="password")
-    db_name = st.text_input("Database Name", "neo4j")
+    st.header("HR Intelligence")
     st.divider()
     st.caption("Kelompok 9 - Analisis Attrition")
 
@@ -67,7 +68,7 @@ st.title("🏢 HR Strategic Intelligence System")
 st.markdown("Sistem pendukung keputusan berbasis **Graph Database** & **Machine Learning** untuk retensi karyawan.")
 
 if not get_driver(db_uri, db_user, db_pass):
-    st.error("❌ Gagal terhubung ke Database. Cek Sidebar.")
+    st.error("❌ Gagal terhubung ke Database. Periksa kredensial di dalam kode source.")
     st.stop()
 
 kpi_data = run_cypher("""
