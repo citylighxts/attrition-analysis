@@ -135,35 +135,70 @@ with tab1:
         if not df_role.empty:
             st.dataframe(df_role.style.background_gradient(cmap="Reds"), use_container_width=True)
 
+q_mapping = """
+MATCH (d:Department)<-[:WORKS_IN]-(e:Employee)-[:HAS_ROLE]->(r:JobRole)
+RETURN d.name AS dept, collect(DISTINCT r.name) AS roles
+ORDER BY dept
+"""
+mapping_raw = run_cypher(q_mapping)
+
+dept_to_roles = { row["dept"]: row["roles"] for row in mapping_raw }
+
 with tab2:
     st.subheader("Analisis Jaringan Karyawan")
     st.markdown("Mengidentifikasi karyawan kunci dalam jaringan.")
     
     col_sel1, col_sel2 = st.columns(2)
+
     with col_sel1:
-        roles_data = run_cypher("MATCH (r:JobRole) RETURN DISTINCT r.name as n")
-        roles = pd.DataFrame(roles_data)['n'].tolist() if roles_data else []
-        role_filter = st.selectbox("Filter Job Role:", ["Semua"] + roles)
-    
+        dept_filter = st.selectbox(
+            "Filter Departemen:",
+            ["Semua"] + list(dept_to_roles.keys()),
+            key="tab2_dept_filter" 
+        )
+
+    with col_sel2:
+        if dept_filter == "Semua":
+            role_options = ["Semua"]
+        else:
+            role_options = ["Semua"] + dept_to_roles[dept_filter]
+            
+        role_filter = st.selectbox(
+            "Filter Job Role:",
+            role_options,
+            key="tab2_role_filter"
+        )
+
     q_graph = """
     MATCH (e:Employee)-[:WORKS_IN]->(d:Department)
     MATCH (e)-[:HAS_ROLE]->(r:JobRole)
-    WHERE e.AttritionRisk >= 0.279
+    WHERE toFloat(e.AttritionRisk) >= 0.279
     """
+
+    if dept_filter != "Semua":
+        q_graph += f" AND d.name = '{dept_filter}'" 
+
     if role_filter != "Semua":
-        q_graph += f" AND r.name = '{role_filter}'"
-    
-    q_graph += " RETURN e.EmployeeID, r.name as Role, d.name as Dept, e.MonthlyIncome as Gaji, e.AttritionRisk as Risk ORDER BY Risk DESC LIMIT 20"
-    
+        q_graph += f" AND r.name = '{role_filter}'" 
+
+    q_graph += """ 
+    RETURN e.EmployeeID, r.name as Role, d.name as Dept, e.MonthlyIncome as Gaji, 
+           toFloat(e.AttritionRisk) as Risk 
+    ORDER BY Risk DESC 
+    """ 
+        
     df_graph = pd.DataFrame(run_cypher(q_graph))
     if not df_graph.empty:
+        df_graph.index = np.arange(1, len(df_graph) + 1)
+        st.caption(f"Menampilkan **{len(df_graph)}** Karyawan Berisiko Tertinggi (Di atas Threshold 27.9%):")
+        
         df_graph['Risk'] = df_graph['Risk'].apply(lambda x: f"{x:.1%}")
         df_graph['Gaji'] = df_graph['Gaji'].apply(lambda x: f"${x:,}")
         
         st.dataframe(df_graph, use_container_width=True)
     else:
         st.info("Tidak ada data karyawan berisiko pada filter ini.")
-
+        
 with tab3:
     st.subheader("Alasan Akar Masalah Karyawan Keluar")
     st.caption("Analisis dilakukan menggunakan Model CatBoost untuk mengetahui akar masalah.")
@@ -308,7 +343,6 @@ berdasarkan model Machine Learning:
 {rec_str}
 
 =============================================================
-Akhir Laporan.
 """
 
     st.download_button(
