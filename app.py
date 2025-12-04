@@ -2,11 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
+import datetime 
 from catboost import CatBoostClassifier
 from neo4j import GraphDatabase
 import plotly.express as px
 import plotly.graph_objects as go
 
+# ==========================================
+# 1. KONFIGURASI HALAMAN & CSS
+# ==========================================
 st.set_page_config(page_title="HR Strategic Dashboard", layout="wide", page_icon="🏢")
 
 st.markdown("""
@@ -19,6 +23,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# ==========================================
+# 2. SIDEBAR & KONEKSI
+# ==========================================
 with st.sidebar:
     st.header("⚙️ Koneksi Database")
     db_uri = st.text_input("URI", "neo4j+s://f1092891.databases.neo4j.io")
@@ -65,10 +72,14 @@ model, feature_names = load_ml_models()
 st.title("🏢 HR Strategic Intelligence System")
 st.markdown("Sistem pendukung keputusan berbasis **Graph Database** & **Machine Learning** untuk retensi karyawan.")
 
+# Cek Koneksi Awal
 if not get_driver(db_uri, db_user, db_pass):
     st.error("❌ Gagal terhubung ke Database. Cek Sidebar.")
     st.stop()
 
+# ==========================================
+# 3. KPI UTAMA (GLOBAL)
+# ==========================================
 kpi_data = run_cypher("""
 MATCH (e:Employee)
 RETURN 
@@ -90,6 +101,9 @@ if kpi_data:
     col4.metric("Threshold Model", "27.9%")
     st.divider()
 
+# ==========================================
+# 4. TABS DASHBOARD
+# ==========================================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Executive Dashboard", 
     "🕸️ Struktur & Relasi", 
@@ -98,6 +112,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔮 Simulasi Prediksi"
 ])
 
+# --- TAB 1: EXECUTIVE DASHBOARD ---
 with tab1:
     st.subheader("Peta Risiko Departemen")
     
@@ -136,13 +151,15 @@ with tab1:
         if not df_role.empty:
             st.dataframe(df_role.style.background_gradient(cmap="Reds"), use_container_width=True)
 
+# --- TAB 2: NETWORK ANALYSIS ---
 with tab2:
     st.subheader("Analisis Jaringan Karyawan")
     st.markdown("Mengidentifikasi karyawan kunci dalam jaringan.")
     
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
-        roles = pd.DataFrame(run_cypher("MATCH (r:JobRole) RETURN DISTINCT r.name as n"))['n'].tolist()
+        roles_data = run_cypher("MATCH (r:JobRole) RETURN DISTINCT r.name as n")
+        roles = pd.DataFrame(roles_data)['n'].tolist() if roles_data else []
         role_filter = st.selectbox("Filter Job Role:", ["Semua"] + roles)
     
     q_graph = """
@@ -164,6 +181,7 @@ with tab2:
     else:
         st.info("Tidak ada data karyawan berisiko pada filter ini.")
 
+# --- TAB 3: EXPLAINABLE AI ---
 with tab3:
     st.subheader("🧠 Mengapa Karyawan Keluar?")
     st.caption("Analisis 'Explainable AI' dari Model CatBoost untuk mengetahui akar masalah.")
@@ -183,47 +201,68 @@ with tab3:
         fig_imp.update_layout(yaxis=dict(autorange="reversed")) 
         st.plotly_chart(fig_imp, use_container_width=True)
         
-        top_factor = df_imp.iloc[0]['Fitur']
-        st.info(f"💡 **Insight:** Faktor **{top_factor}** adalah penentu terbesar keputusan karyawan. Manajemen harus memprioritaskan kebijakan terkait hal ini.")
+        if not df_imp.empty:
+            top_factor = df_imp.iloc[0]['Fitur']
+            st.info(f"💡 **Insight:** Faktor **{top_factor}** adalah penentu terbesar keputusan karyawan. Manajemen harus memprioritaskan kebijakan terkait hal ini.")
     else:
         st.error("Model tidak ditemukan.")
 
+# --- TAB 4: REKOMENDASI & LAPORAN (CORE LOGIC) ---
 with tab4:
     st.subheader("📝 Laporan & Rekomendasi Tindakan")
     
+    # 1. Logika Analisis Rekomendasi
     rekomendasi = []
     
-    avg_income_risk = run_cypher("MATCH (e:Employee) WHERE e.AttritionRisk >= 0.279 RETURN avg(e.MonthlyIncome) as inc")[0]['inc']
-    avg_income_safe = run_cypher("MATCH (e:Employee) WHERE e.AttritionRisk < 0.279 RETURN avg(e.MonthlyIncome) as inc")[0]['inc']
-    
-    if avg_income_risk and avg_income_safe:
-        gap = (avg_income_safe - avg_income_risk) / avg_income_safe
-        if gap > 0.15: 
-            rekomendasi.append({
-                "Area": "💰 Kompensasi",
-                "Status": "KRITIS",
-                "Temuan": f"Karyawan berisiko digaji {gap:.1%} lebih rendah dari rata-rata.",
-                "Saran": "Lakukan penyesuaian gaji atau berikan bonus retensi untuk Top Talent."
-            })
-            
-    ot_risk = run_cypher("MATCH (e:Employee) WHERE e.AttritionRisk >= 0.279 AND e.OverTime = 'Yes' RETURN count(e) as c")[0]['c']
-    if ot_risk > (risk / 2): 
-        rekomendasi.append({
-            "Area": "⏰ Work-Life Balance",
-            "Status": "WARNING",
-            "Temuan": "Mayoritas karyawan berisiko sering melakukan lembur (OverTime).",
-            "Saran": "Evaluasi beban kerja dan pertimbangkan penambahan headcount atau efisiensi proses."
-        })
+    # Analisis Gaji
+    try:
+        avg_income_risk_data = run_cypher("MATCH (e:Employee) WHERE e.AttritionRisk >= 0.279 RETURN avg(e.MonthlyIncome) as inc")
+        avg_income_safe_data = run_cypher("MATCH (e:Employee) WHERE e.AttritionRisk < 0.279 RETURN avg(e.MonthlyIncome) as inc")
         
-    sat_risk = run_cypher("MATCH (e:Employee) WHERE e.AttritionRisk >= 0.279 RETURN avg(e.EnvironmentSatisfaction) as s")[0]['s']
-    if sat_risk is not None and sat_risk < 2.5:
-        rekomendasi.append({
-            "Area": "🏢 Lingkungan Kerja",
-            "Status": "PERLU PERBAIKAN",
-            "Temuan": "Skor kepuasan lingkungan rendah pada kelompok berisiko.",
-            "Saran": "Lakukan survei internal mendalam atau team bonding."
-        })
+        avg_income_risk = avg_income_risk_data[0]['inc'] if avg_income_risk_data else 0
+        avg_income_safe = avg_income_safe_data[0]['inc'] if avg_income_safe_data else 0
+        
+        if avg_income_risk and avg_income_safe:
+            gap = (avg_income_safe - avg_income_risk) / avg_income_safe
+            if gap > 0.15: 
+                rekomendasi.append({
+                    "Area": "💰 Kompensasi",
+                    "Status": "KRITIS",
+                    "Temuan": f"Karyawan berisiko digaji {gap:.1%} lebih rendah dari rata-rata.",
+                    "Saran": "Lakukan penyesuaian gaji atau berikan bonus retensi untuk Top Talent."
+                })
+    except:
+        pass
+            
+    # Analisis Lembur
+    try:
+        ot_risk_data = run_cypher("MATCH (e:Employee) WHERE e.AttritionRisk >= 0.279 AND e.OverTime = 'Yes' RETURN count(e) as c")
+        ot_risk = ot_risk_data[0]['c'] if ot_risk_data else 0
+        if ot_risk > (risk / 2 if risk > 0 else 0): 
+            rekomendasi.append({
+                "Area": "⏰ Work-Life Balance",
+                "Status": "WARNING",
+                "Temuan": "Mayoritas karyawan berisiko sering melakukan lembur (OverTime).",
+                "Saran": "Evaluasi beban kerja dan pertimbangkan penambahan headcount atau efisiensi proses."
+            })
+    except:
+        pass
+        
+    # Analisis Kepuasan
+    try:
+        sat_risk_data = run_cypher("MATCH (e:Employee) WHERE e.AttritionRisk >= 0.279 RETURN avg(e.EnvironmentSatisfaction) as s")
+        sat_risk = sat_risk_data[0]['s'] if sat_risk_data else 0
+        if sat_risk is not None and sat_risk < 2.5:
+            rekomendasi.append({
+                "Area": "🏢 Lingkungan Kerja",
+                "Status": "PERLU PERBAIKAN",
+                "Temuan": "Skor kepuasan lingkungan rendah pada kelompok berisiko.",
+                "Saran": "Lakukan survei internal mendalam atau team bonding."
+            })
+    except:
+        pass
 
+    # 2. Tampilkan Rekomendasi di Layar
     if rekomendasi:
         for rec in rekomendasi:
             with st.expander(f"{rec['Area']} - {rec['Status']}", expanded=True):
@@ -232,8 +271,84 @@ with tab4:
     else:
         st.success("Berdasarkan data saat ini, tidak ada anomali ekstrem yang terdeteksi secara otomatis.")
 
-    st.download_button("📥 Unduh Laporan PDF", "Laporan Simulasi...", file_name="HR_Attrition_Report.txt")
+    # 3. GENERASI KONTEN LAPORAN TXT
+    # Menyiapkan string data untuk departemen dan role
+    q_dept_txt = "MATCH (e:Employee) WHERE e.AttritionRisk >= 0.279 RETURN e.Department as Dept, count(e) as Jumlah ORDER BY Jumlah DESC LIMIT 3"
+    dept_txt_data = pd.DataFrame(run_cypher(q_dept_txt))
+    dept_str = "\n".join([f"   - {row['Dept']}: {row['Jumlah']} orang" for i, row in dept_txt_data.iterrows()]) if not dept_txt_data.empty else "   - Tidak ada data"
 
+    q_role_txt = "MATCH (e:Employee)-[:HAS_ROLE]->(r:JobRole) WHERE e.AttritionRisk >= 0.279 RETURN r.name as Role, count(e) as Count ORDER BY Count DESC LIMIT 5"
+    role_txt_data = pd.DataFrame(run_cypher(q_role_txt))
+    role_str = "\n".join([f"   - {row['Role']}: {row['Count']} orang" for i, row in role_txt_data.iterrows()]) if not role_txt_data.empty else "   - Tidak ada data"
+
+    # Menyiapkan string rekomendasi
+    rec_str = ""
+    if rekomendasi:
+        for rec in rekomendasi:
+            rec_str += f"\n[ {rec['Area']} - {rec['Status']} ]\n"
+            rec_str += f"   Temuan: {rec['Temuan']}\n"
+            rec_str += f"   Saran : {rec['Saran']}\n"
+    else:
+        rec_str = "\n   Tidak ada rekomendasi kritis saat ini.\n"
+
+    # Menyusun Isi Laporan Lengkap
+    report_content = f"""=============================================================
+             LAPORAN ANALISIS & REKOMENDASI HR
+=============================================================
+Dibuat oleh : HR Strategic Intelligence System (Kelompok 9)
+Tanggal     : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Database    : {db_name}
+Model Threshold: 27.9%
+
+-------------------------------------------------------------
+1. RINGKASAN KINERJA ORGANISASI (KPI)
+-------------------------------------------------------------
+- Total Karyawan      : {total}
+- Karyawan High Risk  : {risk} ({risk_pct:.2f}%)
+- Rata-rata Risiko    : {kpi['avg_risk']:.2%}
+
+-------------------------------------------------------------
+2. PETA RISIKO (Graph Insights)
+-------------------------------------------------------------
+A. Top 3 Departemen Berisiko:
+{dept_str}
+
+B. Top 5 Jabatan Kritis:
+{role_str}
+
+-------------------------------------------------------------
+3. FAKTOR PENYEBAB UTAMA (AI Analysis)
+-------------------------------------------------------------
+Faktor-faktor yang paling memengaruhi keputusan karyawan untuk keluar 
+berdasarkan model Machine Learning:
+
+"""
+    # Menambahkan Feature Importance ke Laporan
+    if model:
+        fi = model.get_feature_importance()
+        df_fi = pd.DataFrame({'F': feature_names, 'I': fi}).sort_values('I', ascending=False).head(5)
+        for i, row in df_fi.iterrows():
+            report_content += f"   - {row['F']} (Score: {row['I']:.2f})\n"
+
+    report_content += f"""
+-------------------------------------------------------------
+4. REKOMENDASI STRATEGIS & INTERVENSI
+-------------------------------------------------------------
+{rec_str}
+
+=============================================================
+Akhir Laporan.
+"""
+
+    # 4. Tombol Unduh Laporan (Fixed)
+    st.download_button(
+        label="📥 Unduh Laporan Lengkap (.txt)",
+        data=report_content,
+        file_name=f"HR_Report_{datetime.date.today()}.txt",
+        mime="text/plain"
+    )
+
+# --- TAB 5: SIMULASI PREDIKSI ---
 with tab5:
     st.subheader("🔮 Simulasi Prediksi Karyawan")
     st.caption("Masukkan data profil karyawan untuk memprediksi risiko attrition menggunakan model CatBoost.")
@@ -288,6 +403,7 @@ with tab5:
         if model is None or feature_names is None:
             st.error("⚠️ Model belum dimuat. Pastikan file 'catboost_optimized.cbm' dan 'feature_names.pkl' ada.")
         else:
+            # Preprocessing Input
             data = {
                 'Age': age, 'MonthlyIncome': income, 'TotalWorkingYears': total_working_years, 
                 'OverTime': overtime, 'Department': dept, 'JobRole': role, 
@@ -304,6 +420,7 @@ with tab5:
             
             df_pred = pd.DataFrame([data])
             
+            # Feature Engineering On-the-fly
             df_pred['TotalSatisfaction'] = (
                 df_pred['JobSatisfaction'] + df_pred['EnvironmentSatisfaction'] + 
                 df_pred['RelationshipSatisfaction'] + df_pred['JobInvolvement']
@@ -318,12 +435,14 @@ with tab5:
             df_pred['IncomePerAge'] = df_pred['MonthlyIncome'] / age_safe
             
             try:
+                # Align Columns
                 for col in feature_names:
                     if col not in df_pred.columns:
                         df_pred[col] = 0 
                 
                 df_final = df_pred[feature_names]
                 
+                # Prediction
                 probabilitas = model.predict_proba(df_final)[0][1]
                 
                 st.markdown("---")
