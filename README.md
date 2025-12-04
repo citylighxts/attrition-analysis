@@ -27,8 +27,8 @@ Follow these steps to run the project on your local machine.
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/citylighxts/analisis-attrition.git
-    cd analisis-attrition
+    git clone https://github.com/citylighxts/attrition-analysis.git
+    cd attrition-analysis
     ```
 
 2.  **Create a Virtual Environment:**
