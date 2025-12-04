@@ -487,14 +487,14 @@ with tab6:
         limit_nodes = st.slider("Jumlah Limit Path", 10, 100, 25)
         
         st.markdown("""
-        🔴 High Risk Emp
-
-        🟢 Low Risk Emp 
+        <span style='color:#ef476f'>■</span> High Risk Emp
+        
+        <span style='color:#06d6a0'>■</span> Low Risk Emp 
                 
-        🔵 Department
+        <span style='color:#26547c'>■</span> Department
                 
-        🟠 Job Role
-        """)
+        <span style='color:#ffd166'>■</span> Job Role
+        """, unsafe_allow_html=True)
 
     with c_ctrl2:
         base_query = ""
@@ -545,20 +545,21 @@ with tab6:
                         n_id = str(node_data.get('EmployeeID', 'Unknown'))
                         risk = node_data.get('AttritionRisk', 0)
                         n_label = f"Emp {n_id}"
-                        n_color = "#ff4b4b" if risk >= 0.279 else "#00e676"
+                        # Updated Colors
+                        n_color = "#ef476f" if risk >= 0.279 else "#06d6a0"
                         n_shape = "dot"
                         n_title = f"Risk: {risk:.1%}"
                     
                     elif "Department" in node_labels:
                         n_id = node_data.get('name', 'Unknown Dept')
                         n_label = n_id
-                        n_color = "#29b6f6"
+                        n_color = "#26547c" # Updated
                         n_shape = "hexagon"
                     
                     elif "JobRole" in node_labels:
                         n_id = node_data.get('name', 'Unknown Role')
                         n_label = n_id
-                        n_color = "#ffa726"
+                        n_color = "#ffd166" # Updated
                         n_shape = "diamond"
                     
                     else:
