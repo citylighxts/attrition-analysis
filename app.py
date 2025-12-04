@@ -17,6 +17,7 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
     font-size: 1.1rem;
     }
+    #MainMenu {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -24,11 +25,6 @@ db_uri = "neo4j+s://f1092891.databases.neo4j.io"
 db_user = "neo4j"
 db_pass = "RJlbxkjZP74VnrD6R87vajPEbRS3Xs5YE2UyVZUT2K4"
 db_name = "neo4j"
-
-with st.sidebar:
-    st.header("HR Intelligence")
-    st.divider()
-    st.caption("Kelompok 9 - Analisis Attrition")
 
 @st.cache_resource
 def get_driver(uri, user, password):
@@ -66,6 +62,7 @@ model, feature_names = load_ml_models()
 
 st.title("🏢 HR Strategic Intelligence System")
 st.markdown("Sistem pendukung keputusan berbasis **Graph Database** & **Machine Learning** untuk retensi karyawan.")
+st.caption("Kelompok 9 - Analisis Attrition")
 
 if not get_driver(db_uri, db_user, db_pass):
     st.error("❌ Gagal terhubung ke Database. Periksa kredensial di dalam kode source.")
