@@ -1,7 +1,7 @@
 ## Analisis HR Attrition & Sistem Prediksi
 Proyek ini adalah solusi untuk menganalisis dan memprediksi risiko keluarnya karyawan (Employee Attrition) menggunakan Machine Learning dan Graph Database. Sistem ini membantu departemen HR dalam mengidentifikasi talenta yang berisiko tinggi untuk keluar dan memahami pola hubungan antar karyawan dalam organisasi.
 
-Live Demo: [Analysis Attrition](attrition-analysis.streamlit.app)
+Live Demo: [Analysis Attrition](https://attrition-analysis.streamlit.app)
 
 ## Fitur Kunci
 - **Prediksi Machine Learning:** Menggunakan algoritma `CatBoost Classifier` yang telah dioptimasi dengan Optuna untuk memprediksi probabilitas attrition karyawan.
