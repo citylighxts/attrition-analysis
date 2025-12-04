@@ -21,10 +21,10 @@ st.markdown("""
 
 with st.sidebar:
     st.header("⚙️ Koneksi Database")
-    db_uri = st.text_input("URI", "bolt://localhost:7687")
+    db_uri = st.text_input("URI", "neo4j+s://f1092891.databases.neo4j.io")
     db_user = st.text_input("Username", "neo4j")
-    db_pass = st.text_input("Password", "12345678", type="password")
-    db_name = st.text_input("Database Name", "fp-rsbp")
+    db_pass = st.text_input("Password", "RJlbxkjZP74VnrD6R87vajPEbRS3Xs5YE2UyVZUT2K4", type="password")
+    db_name = st.text_input("Database Name", "neo4j")
     st.divider()
     st.caption("Kelompok 9 - Analisis Attrition")
 
